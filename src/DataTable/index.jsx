@@ -1,76 +1,56 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 import Pagination from './Pagination'
 import Row from './Row'
 import Search from './Search'
 
-class DataTable extends React.Component {
-  state = {
-    rows: this.props.rows,
-    currentPageNumber: 0,
-    totalNumberOfPages: this.calculateTotalNumberOfPages(this.props.rows)
-  }
-
-  static defaultProps = {
-    rowsPerPage: 40
-  }
-
-  calculateTotalNumberOfPages(rows) {
-    const { rowsPerPage } = this.props
-    if (rowsPerPage == 0) return 0
-    return Math.ceil(rows.length / rowsPerPage)
-  }
-
-  search(event) {
-    const { rows } = this.props
-    const text = event.target.value
-    let rowsFound = rows
-
-    if (text) {
-      rowsFound = rows.filter((row) => {
-        return row.name1.toLowerCase().search(text.toLowerCase()) > -1 ||
-         (row.email && row.email.toLowerCase().search(text.toLowerCase()) > -1)
-      })
-    }
-
-    this.setState({
-      rows: rowsFound,
-      currentPageNumber: 0,
-      totalNumberOfPages: this.calculateTotalNumberOfPages(rowsFound)
-    })
-  }
-
-  changeToPageNumber(pageNumber) {
-    this.setState({ currentPageNumber: pageNumber })
-  }
-
-  rowsInPageNumber(pageNumber) {
-    const { rowsPerPage } = this.props
-    const startIndex = pageNumber * rowsPerPage
-    return [startIndex, startIndex + rowsPerPage]
-  }
-
-  render() {
-    const { rows, currentPageNumber, totalNumberOfPages } = this.state
-    const rowsToRender = rows
-      .map(row => <Row key={row.per_id} row={row} />)
-      .slice(...this.rowsInPageNumber(currentPageNumber))
-
-    return(
-      <div>
-        <Search onSearch={this.search.bind(this)} />
-        <table>
-          <tbody>
-            { rowsToRender }
-          </tbody>
-        </table>
-        <Pagination
-          currentPageNumber={currentPageNumber}
-          totalNumberOfPages={totalNumberOfPages}
-          onChange={this.changeToPageNumber.bind(this)} />
-      </div>
-    )
-  }
+const calculateTotalNumberOfPages = (rows, rowsPerPage) => {
+  if (rowsPerPage === 0) return 0
+  return Math.ceil(rows.length / rowsPerPage)
 }
 
-export default DataTable
+const rowsInPageNumber = (pageNumber, rowsPerPage) => {
+  const startIndex = pageNumber * rowsPerPage
+  return [startIndex, startIndex + rowsPerPage]
+}
+
+export default function DataTable ({ rows, rowsPerPage = 40 }) {
+  // I decided to only save the data that origins from user input to state, and let the rest be handled as derived state.
+  // Specifically regarding rows data I also opted against saving props.rows in local state, because I prefer keeping the props.row as the single source of truth.
+  const [currentPageNumber, setCurrentPageNumber] = useState(0)
+  const [search, setSearch] = useState('')
+
+  const handleSearch = (event) => {
+    const text = event.target.value
+    setSearch(text)
+  }
+
+  // If we have large data sets I would refactor this function using useMemo with dependencies on [rows, search]
+  const filteredRows = rows.filter(({ name1, email }) => {
+    // would have liked to use optional chaining ("name?.toLowerCase()") to null check below values - not supported in eslint config
+    const nameMatch = name1 && name1.toLowerCase().includes(search.toLowerCase())
+    const emailMatch = email && email.toLowerCase().includes(search.toLowerCase())
+    return nameMatch || emailMatch
+  })
+
+  const totalNumberOfPages = calculateTotalNumberOfPages(filteredRows, rowsPerPage)
+
+  const rowsToRender = filteredRows
+    .slice( ...rowsInPageNumber(currentPageNumber, rowsPerPage))
+    .map(row => <Row key={row.per_id} row={row} />)
+
+  return (
+    <div>
+      <Search onSearch={handleSearch} search={search} />
+      <table>
+        <tbody>
+          { rowsToRender }
+        </tbody>
+      </table>
+      <Pagination
+        currentPageNumber={currentPageNumber}
+        totalNumberOfPages={totalNumberOfPages}
+        onChange={setCurrentPageNumber} />
+    </div>
+  )
+}
